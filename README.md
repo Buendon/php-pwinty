@@ -1,6 +1,6 @@
 # PHP Pwinty
 
-A PHP implementation of the Pwinty HTTP API v2.1
+A PHP implementation of the Pwinty HTTP API v2.3
 
 Based on an implementation of API v1 by Brad Pineau
 
