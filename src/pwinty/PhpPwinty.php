@@ -28,6 +28,8 @@
 namespace pwinty;
 
 class PhpPwinty {
+    const API_VERSION = 2.3;
+
 	var $opt = array();
 	var $api_url = "";
 	var $last_error = "";
@@ -40,9 +42,9 @@ class PhpPwinty {
 	function __construct($options) {
 		$this->opt = $options;
 		if ($this->opt['api'] == "production") {
-			$this->api_url = "https://api.pwinty.com/v2.1";
+			$this->api_url = "https://api.pwinty.com/v".$this::API_VERSION;
 		} else {
-			$this->api_url = "https://sandbox.pwinty.com/v2.1";
+			$this->api_url = "https://sandbox.pwinty.com/v".$this::API_VERSION;
 		}
 	}
 
@@ -52,10 +54,13 @@ class PhpPwinty {
     * Sends a HTTP request to the Pwinty API. This should not be called directly.
     *
     * @param string $call The API call.
+    * @param $data
+    * @param $method
+    * @param $isMultipart
     * @return array The response returned from the API call.
     * @access private
     */
-	function apiCall($call, $data, $method) {
+	function apiCall($call, $data, $method, $isMultipart = false) {
 		/*
 			internal function, you shouldn't call directly
 		*/
@@ -67,7 +72,12 @@ class PhpPwinty {
 		$headers = array();
 		$headers[] = 'X-Pwinty-MerchantId: '.$this->opt['merchantId'];
 		$headers[] = 'X-Pwinty-REST-API-Key: '.$this->opt['apiKey'];
-		$headers[] = 'Content-Type:application/json';
+		if($isMultipart) {
+            $headers[] = 'Content-Type:multipart/form-data';
+        }
+        else {
+		    $headers[] = 'Content-Type:application/json';
+        }
 
 		$ch = curl_init();
 		curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
@@ -122,14 +132,26 @@ class PhpPwinty {
     * @param string $stateOrCounty State or County in the address (optional on create, needed by submit)
     * @param string $postalOrZipCode Postal code or Zip code of recipient (optional on create, needed by submit)
     * @param string $countryCode PCountry code of the country where the order should be printed
-    * @param string $destinationCountry Code Country code of the country where the order will be shipped (optional)
+    * @param string $destinationCountryCode Country code of the country where the order will be shipped (optional)
     * @param boolean $useTrackedShipping whether to upgrade to a tracked shipping service when available
     * @param string $payment Payment option for order, can be either InvoiceMe or InvoiceRecipient (optional)
     * @param string $qualityLevel Quality Level for order, can be either Pro or Standard
-    * @return string The newly created order id
+    * @return array In case of success, the updated order as a JSON array, otherwise, it returns 0 and the error message
+     *              can be found in the last_error class field.
     * @access public
     */
-	function createOrder($recipientName, $email, $address1, $address2, $addressTownOrCity, $stateOrCounty, $postalOrZipCode, $countryCode, $destinationCountryCode, $useTrackedShipping, $payment, $qualityLevel) {
+	function createOrder($recipientName,
+                         $email,
+                         $address1,
+                         $address2,
+                         $addressTownOrCity,
+                         $stateOrCounty,
+                         $postalOrZipCode,
+                         $countryCode,
+                         $destinationCountryCode,
+                         $useTrackedShipping,
+                         $payment,
+                         $qualityLevel) {
 		$data = array(
 			"recipientName" => $recipientName,
 			"email" => $email,
@@ -169,11 +191,15 @@ class PhpPwinty {
     * @return array The order details
     * @access public
     */
-	function getOrder($id="") {
+	function getOrder($id=null) {
 		$data = array();
-		$data["id"] = $id;
 
-		$data = $this->apiCall("/Orders", $data, "GET");
+		$url = "/Orders";
+		if($id != null && $id != '') {
+		    $url = $url.'/'.$id;
+        }
+
+		$data = $this->apiCall($url, $data, "GET");
 		if (is_array($data)) {
 			if (isset($data["error"])) {
 				$this->last_error = $data["error"];
@@ -290,12 +316,12 @@ class PhpPwinty {
     *
     * @param string $orderId the id of the order the photo is being added to
     * @param string $type the type/size of photo (available photo types)
-    * @param string $url the url from which we can download it
+    * @param string $url the url from which we can download it (unless you specify the file path)
     * @param string $copies the number of copies of the photo to include in the order
     * @param string $sizing how the image should be resized when printing (resizing options)
     * @param string $priceToUser  the price (in cents/pence) you'd like to charge for each copy (only available if your payment option is InvoiceRecipient
     * @param string $md5Hash an md5Hash of the file which we'll check before processing
-    * @param string $file if you have the image file, then make this request as a multipart/form-data with the file included
+    * @param string $file The path to the local file. The picture will be sent in the API call.
 	* @return array The order submission status
     * @access public
     */
@@ -308,11 +334,20 @@ class PhpPwinty {
 		);
 		if ($priceToUser) $data['priceToUser'] = $priceToUser;
 		if ($md5Hash) $data['md5Hash'] = $md5Hash;
-		if ($file) $data['file'] = $file;
 
-		$str_data = json_encode($data);
+		$isMultipart = false;
 
-		$data = $this->apiCall("/Orders/".$orderId."/Photos", $str_data, "POST");
+		if ($file) {
+		    $data['file'] = curl_file_create($file);
+		    $isMultipart = true;
+		    $dataToSend = $data;
+        }
+        else {
+            $dataToSend = json_encode($data);
+        }
+
+
+		$data = $this->apiCall("/Orders/".$orderId."/Photos", $dataToSend, "POST", $isMultipart);
 		if (is_array($data)) {
 			if (isset($data["error"])) {
 				$this->last_error = $data["error"];
