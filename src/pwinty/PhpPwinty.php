@@ -141,7 +141,6 @@ class PhpPwinty {
     * @access public
     */
 	function createOrder($recipientName,
-                         $email,
                          $address1,
                          $address2,
                          $addressTownOrCity,
@@ -154,7 +153,6 @@ class PhpPwinty {
                          $qualityLevel) {
 		$data = array(
 			"recipientName" => $recipientName,
-			"email" => $email,
 			"address1" => $address1,
 			"address2" => $address2,
 			"addressTownOrCity" => $addressTownOrCity,
